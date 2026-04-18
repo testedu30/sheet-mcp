@@ -20,11 +20,33 @@ const SCOPES = [
 
 let googleClientsPromise;
 
+// async function getGoogleClients() {
+//   if (!googleClientsPromise) {
+//     googleClientsPromise = (async () => {
+//       const auth = await google.auth.getClient({
+//         projectId: process.env.GCP_PROJECT_ID,
+//         scopes: SCOPES
+//       });
+
+//       return {
+//         sheets: google.sheets({ version: 'v4', auth }),
+//         drive: google.drive({ version: 'v3', auth })
+//       };
+//     })();
+//   }
+
+//   return googleClientsPromise;
+// }
+
 async function getGoogleClients() {
   if (!googleClientsPromise) {
     googleClientsPromise = (async () => {
-      const auth = await google.auth.getClient({
-        projectId: process.env.GCP_PROJECT_ID,
+
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GCP_SERVICE_ACCOUNT_EMAIL,
+          private_key: process.env.GCP_PRIVATE_KEY.replace(/\\n/g, '\n')
+        },
         scopes: SCOPES
       });
 
@@ -37,6 +59,7 @@ async function getGoogleClients() {
 
   return googleClientsPromise;
 }
+
 
 function respondWith(content) {
   const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
