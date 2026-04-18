@@ -197,6 +197,156 @@ server.registerTool(
   }
 );
 
+
+server.registerTool(
+  'get_sheet_info',
+  {
+    title: 'Get Sheet Info',
+    description: 'Get metadata about spreadsheet (tabs, rows, columns)',
+    inputSchema: {
+      url_or_id: z.string()
+    },
+    outputSchema: {
+      sheets: z.array(
+        z.object({
+          title: z.string(),
+          rows: z.number(),
+          cols: z.number()
+        })
+      )
+    }
+  },
+  async ({ url_or_id }) => {
+    const { sheets } = await getGoogleClients();
+
+    // extract ID from URL if needed
+    const spreadsheetId = url_or_id.includes('docs.google.com')
+      ? url_or_id.split('/d/')[1].split('/')[0]
+      : url_or_id;
+
+    const res = await sheets.spreadsheets.get({ spreadsheetId });
+
+    const info = res.data.sheets.map((s) => ({
+      title: s.properties.title,
+      rows: s.properties.gridProperties.rowCount,
+      cols: s.properties.gridProperties.columnCount,
+    }));
+
+    return respondWith({ sheets: info });
+  }
+);
+
+
+server.registerTool(
+  'read_range',
+  {
+    title: 'Read Range',
+    description: 'Read data from a Google Sheet using A1 notation',
+    inputSchema: {
+      url_or_id: z.string().describe('Google Sheet URL or ID'),
+      range: z.string().describe('Range like Sheet1!A1:C10')
+    },
+    outputSchema: {
+      values: z.array(z.array(z.string()))
+    }
+  },
+  async ({ url_or_id, range }) => {
+    const { sheets } = await getGoogleClients();
+
+    // URL se ID extract
+    const spreadsheetId = url_or_id.includes('docs.google.com')
+      ? url_or_id.split('/d/')[1].split('/')[0]
+      : url_or_id;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range
+    });
+
+    const values = response.data.values || [];
+
+    return respondWith({ values });
+  }
+);
+
+server.registerTool(
+  'write_sheet',
+  {
+    title: 'Write Range',
+    description: 'Write or update values in a Google Sheet (overwrite existing data)',
+    inputSchema: {
+      url_or_id: z.string().describe('Google Sheet URL or ID'),
+      range: z.string().describe('Range like Sheet1!A1:C10'),
+      values: z.array(
+        z.array(z.union([z.string(), z.number(), z.boolean()]))
+      ).min(1)
+    },
+    outputSchema: {
+      updatedRange: z.string(),
+      updatedRows: z.number()
+    }
+  },
+  async ({ url_or_id, range, values }) => {
+    const { sheets } = await getGoogleClients();
+
+    // URL → ID extract
+    const spreadsheetId = url_or_id.includes('docs.google.com')
+      ? url_or_id.split('/d/')[1].split('/')[0]
+      : url_or_id;
+
+    const response = await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values
+      }
+    });
+
+    return respondWith({
+      updatedRange: response.data.updatedRange || '',
+      updatedRows: response.data.updatedRows || 0
+    });
+  }
+);
+
+server.registerTool(
+  'clear_range',
+  {
+    title: 'Clear Range',
+    description: 'Clear data from a specific range in a Google Sheet',
+    inputSchema: {
+      url_or_id: z.string().describe('Google Sheet URL or ID'),
+      sheet: z.string().describe('Sheet name (e.g. Sheet1)'),
+      range: z.string().describe('Range like A1:C10')
+    },
+    outputSchema: {
+      clearedRange: z.string()
+    }
+  },
+  async ({ url_or_id, sheet, range }) => {
+    const { sheets } = await getGoogleClients();
+
+    // URL → ID extract
+    const spreadsheetId = url_or_id.includes('docs.google.com')
+      ? url_or_id.split('/d/')[1].split('/')[0]
+      : url_or_id;
+
+    const fullRange = `${sheet}!${range}`;
+
+    const response = await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: fullRange
+    });
+
+    return respondWith({
+      clearedRange: response.data.clearedRange || fullRange
+    });
+  }
+);
+
+
+
 const app = express();
 app.use(express.json());
 
